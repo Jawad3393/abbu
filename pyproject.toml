@@ -1,0 +1,19 @@
+[project]
+name = "abbu"
+version = "0.0.1"
+authors = [
+    { name="Jawad Ahmad", email="jahmad3393@gmail.com" }
+]
+description = "Generate code"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "openai >= 1.35.6",
+]
+
+
