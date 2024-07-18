@@ -45,7 +45,7 @@ def generate_code(spec: FunctionSpec):
     global ABBU_CONFIG
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
 
-    response = client.chat.completions.create(
+    response = ABBU_CONFIG["client"].chat.completions.create(
         model = ABBU_CONFIG["model_version"],
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
