@@ -41,6 +41,13 @@ def setup(
     return ABBU_CONFIG
 
 
+def ensure_cache_dir(cache_dir_path):
+    # # TODO: move this into the setup function.
+    # Specifically: somewhere around the if reset_cache block of code.
+    # We kinda have to decide if you want an entire directory for the cache, or a single file
+    Path(cache_dir_path).mkdir(exist_ok=True)
+
+
 def generate_code(spec: FunctionSpec):
     global ABBU_CONFIG
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
@@ -58,10 +65,10 @@ def generate_code(spec: FunctionSpec):
     return code_text
 
 
-def extract_code(gpt_output: str, spec: FunctionSpec):
+def extract_code(raw_text: str, spec: FunctionSpec):
     # TODO: need to make sure that gpt_output either matches spec.name ... or replace it
     # Find the part of the response that contains the Python code
-    code_start = code.find('def ')
+    code_start = raw_text.find('def ')
     if code_start != -1:
         code = code[code_start:]
     else:
@@ -89,56 +96,55 @@ def load_cache():
         contents = file.read()
 
     # TODO: need to convert contents to a dict[str,str]
+    # This is probably non-trivial
     return contents
 
 
+def update_cache(code_text: str, spec: FunctionSpec, cache: dict[str,str]):
+    cache[spec.name] = code_text
+
+
 def save_cache(cache: dict[str,str]):
-    # TODO: Writes all the contents to the cache
+    # TODO: Make sure the lgoic is correct?
+    all_code = ""
+    for func_name, func_text in cache.items():
+        all_code += func_text + "\n\n"
+
     with open(file, 'w') as file:
-        file.write(content)
+        file.write(all_code)
 
 def load_code(module_name, file):
-    # TODO: 
+    # TODO: Make sure this is correct ...? :)
     spec = importlib.util.spec_from_file_location(module_name, file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
-def ensure_cache_dir(cache_dir_path):
-    # # TODO: move this into the setup.
-    # We kinda have to decide if you want an entire directory for the cache, or a single file
-    Path(cache_dir_path).mkdir(exist_ok=True)
 
 
-def save_cache(contents, file):
-    with open(file, 'w') as file:
-        file.write(contents)
+def create_function(
+    spec: FunctionSpec,
+    use_cached_if_exists: bool = True,  # Prevents re-generation if it already exists in the cache
+    name_this_parameter_correctly_about_cache_saving: bool = False,
+):
 
-def update_cache(func, cache_contents):
+    cache = load_cache()
 
-    print(f"func is")
-    print(func)
+    if use_cached_if_exists:
+        # TODO: check if it exists in the cache
+        if exists_in_cache:
+            return cached_function_which_is_a_callable_object
 
-    cache_contents[func.__name__] = func
-    return cache_contents
+    func_text = generate_code(spec)
 
-def create_function(spec, cache_dir):
-    client = get_openai_client()
-    func_text = generate_code(client, spec)
-
-    # TODO: the cache file (or cache dir) should now be specified in the setup function.
-    # You also shouldn't name your file something that can easily conflict with what a programmer might create
-    # For instance, abbu_cache_<hexid_whatever>.py is better than cache.py
-    cache_file = os.path.join(cache_dir, 'cache.py')
-    print(f"The cache is at {cache_file}")
-
-    cache_contents = load_cache(cache_file)
-    cache_contents = update_cache(func_text, cache_contents)
-    save_cache(cache_contents, cache_file)
+    # Save to the cachea if we want it to
+    if we_should_save_the_cache:
+        update_cache(func_text, spec, cache)
+        save_cache(...)
 
     # TODO: The python module's name is equal to its file name (without .py).
     # So you'd have to name your file generated_func_module.py for this to work (but give it a better name)
-    module_name = 'generated_func_module'
+    module_name = 'generated_func_module'   # This should be ABBU_CONFIG["cache_file"].strip_the_dot_py_suffix()
     mod = load_code(module_name, cache_file)
     f = getattr(mod, func_text.__name__)
     return f
