@@ -1,75 +1,65 @@
 import re
 import os
+from typing import Optional
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
 import importlib.util
 from pathlib import Path
 
-_api_key = None
+from .consts import PROMPT_HEADER
+from .spec import FunctionSpec
 
-def set_api_key(key: str):
-    global _api_key
-    _api_key = key
-    print("API key set successfully.")
 
-def get_openai_client():
-    if _api_key is None:
-        raise ValueError("API key is not set. Use set_api_key('<your_api_key>') to set it.")
-    return OpenAI(api_key=_api_key)
+# The config that will be filled in when setup(...) is called
+ABBU_CONFIG = {
+    "client": None,
+    "model_version": None,
+    "cache_file": None
+}
 
-def from_spec(spec: str, use_cache: bool = True):
-    def decorator(func):
-        if _api_key is None:
-            raise ValueError("API key is not set. Use set_api_key('<your_api_key>') to set it.")
-        
-        spec_hash = hash(spec)
-        cache_dir = "cache"
-        ensure_cache_dir(cache_dir)
-        cache_file = os.path.join(cache_dir, f"cache_{spec_hash}.py")
 
-        if use_cache and os.path.exists(cache_file):
-            # Load cached function implementation
-            module = load_code("cached_module", cache_file)
-        else:
-            # Generate function implementation
-            client = get_openai_client()
-            generated_code = generate_code(client, spec)
-            save_code(generated_code, cache_file)
-            module = load_code("generated_module", cache_file)
+def setup(
+    api_key: str,
+    cache_file: str,
+    reset_cache: bool = False
+    model_version = "gpt-3.5-turbo",
+    config: Optional[dict] = None,
+):
+    """ Set up the config with which to run abbu """
+    global ABBU_CONFIG
+    if config is not None:
+        ABBU_CONFIG = config
+    else:
+        ABBU_CONFIG["client"] = OpenAI(api_key="_api_key")
+        ABBU_CONFIG["model_version"] = model_version
+        ABBU_CONFIG["cache_file"] = cache_file
 
-        func_name = func.__name__
-        if hasattr(module, func_name):
-            func.__code__ = getattr(module, func_name).__code__
-        else:
-            raise AttributeError(f"The generated module does not have the expected function '{func_name}'")
+    if reset_cache:
+        # TODO: Delete the contents of the cache_file if it exists
+        pass
 
-        return func
+    return ABBU_CONFIG
 
-    return decorator
 
-def generate_code(client, spec):
-    prompt = create_prompt(spec)
+def generate_code(spec: FunctionSpec):
+    global ABBU_CONFIG
+    prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
+
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
+        model = ABBU_CONFIG["model_version"],
+        messages = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "User", "content": prompt}
         ]
     )
-    generated_code = response.choices[0].message.content.strip()
-    cleaned_code = clean_code(generated_code)
-    return cleaned_code
 
-def create_prompt(specification):
-    prompt = (
-        "You are a Python developer. Based on the following specification, ensure the code is ready to run immediately with no formatting issues or syntax errors."
-        "Generate a Python file.\n\n"
-        "Specification:\n"
-        f"{specification}\n\n"
-    )
-    return prompt
+    raw_text = response.choices[0].message.content.strip()
+    code_text = extract_code(raw_text, spec)
+    return code_text
 
-def clean_code(code):
+
+def extract_code(gpt_output: str, spec: FunctionSpec):
+    # TODO: need to make sure that gpt_output either matches spec.name ... or replace it
     # Find the part of the response that contains the Python code
     code_start = code.find('def ')
     if code_start != -1:
@@ -89,12 +79,23 @@ def clean_code(code):
     cleaned_code = re.sub(r'\n\s*\n', '\n', cleaned_code)
     return cleaned_code.strip()
 
-def save_code(content, file_path):
-    with open(file_path, 'w') as file:
+
+
+def load_cache_as_dict(cache_file: str):
+    # TODO: Returns a func_name -> code_text dictionary
+    pass
+
+def save_cache(cache: dict[str,str], cache_file):
+    # Writes all the contents to the cache
+    pass
+
+
+def save_code(content, file):
+    with open(file, 'w') as file:
         file.write(content)
 
-def load_code(module_name, file_path):
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
+def load_code(module_name, file):
+    spec = importlib.util.spec_from_file_location(module_name, file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -102,29 +103,38 @@ def load_code(module_name, file_path):
 def ensure_cache_dir(cache_dir_path):
     Path(cache_dir_path).mkdir(exist_ok=True)
 
-def load_cache(file_path):
-    if not os.path.exists(file_path):
+def load_cache(file):
+    if not os.path.exists(file):
         return {}
-    with open(file_path, 'r') as file:
+    with open(file, 'r') as file:
         contents = file.read()
     return contents
 
-def save_cache(contents, file_path):
-    with open(file_path, 'w') as file:
+def save_cache(contents, file):
+    with open(file, 'w') as file:
         file.write(contents)
 
 def update_cache(func, cache_contents):
+
+    print(f"func is")
+    print(func)
+
     cache_contents[func.__name__] = func
     return cache_contents
 
 def create_function(spec, cache_dir):
-    func_text = call_openai(spec)
-    cache_file_path = os.path.join(cache_dir, 'cache.py')
-    cache_contents = load_cache(cache_file_path)
+    client = get_openai_client()
+    func_text = generate_code(client, spec)
+    # func_text = call_openai(spec)
+    cache_file = os.path.join(cache_dir, 'cache.py')
+    print(f"The cache is at {cache_file}")
+
+    cache_contents = load_cache(cache_file)
     cache_contents = update_cache(func_text, cache_contents)
-    save_cache(cache_contents, cache_file_path)
+    save_cache(cache_contents, cache_file)
+
     
     module_name = 'generated_func_module'
-    mod = load_code(module_name, cache_file_path)
+    mod = load_code(module_name, cache_file)
     f = getattr(mod, func_text.__name__)
     return f
