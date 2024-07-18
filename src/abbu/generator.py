@@ -81,34 +81,34 @@ def extract_code(gpt_output: str, spec: FunctionSpec):
 
 
 
-def load_cache_as_dict(cache_file: str):
-    # TODO: Returns a func_name -> code_text dictionary
-    pass
+def load_cache():
+    cache_file = ABBU_CONFIG["cache_file"]
+    if not os.path.exists(file):
+        return {}
+    with open(file, 'r') as file:
+        contents = file.read()
 
-def save_cache(cache: dict[str,str], cache_file):
-    # Writes all the contents to the cache
-    pass
+    # TODO: need to convert contents to a dict[str,str]
+    return contents
 
 
-def save_code(content, file):
+def save_cache(cache: dict[str,str]):
+    # TODO: Writes all the contents to the cache
     with open(file, 'w') as file:
         file.write(content)
 
 def load_code(module_name, file):
+    # TODO: 
     spec = importlib.util.spec_from_file_location(module_name, file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 def ensure_cache_dir(cache_dir_path):
+    # # TODO: move this into the setup.
+    # We kinda have to decide if you want an entire directory for the cache, or a single file
     Path(cache_dir_path).mkdir(exist_ok=True)
 
-def load_cache(file):
-    if not os.path.exists(file):
-        return {}
-    with open(file, 'r') as file:
-        contents = file.read()
-    return contents
 
 def save_cache(contents, file):
     with open(file, 'w') as file:
@@ -125,7 +125,10 @@ def update_cache(func, cache_contents):
 def create_function(spec, cache_dir):
     client = get_openai_client()
     func_text = generate_code(client, spec)
-    # func_text = call_openai(spec)
+
+    # TODO: the cache file (or cache dir) should now be specified in the setup function.
+    # You also shouldn't name your file something that can easily conflict with what a programmer might create
+    # For instance, abbu_cache_<hexid_whatever>.py is better than cache.py
     cache_file = os.path.join(cache_dir, 'cache.py')
     print(f"The cache is at {cache_file}")
 
@@ -133,7 +136,8 @@ def create_function(spec, cache_dir):
     cache_contents = update_cache(func_text, cache_contents)
     save_cache(cache_contents, cache_file)
 
-    
+    # TODO: The python module's name is equal to its file name (without .py).
+    # So you'd have to name your file generated_func_module.py for this to work (but give it a better name)
     module_name = 'generated_func_module'
     mod = load_code(module_name, cache_file)
     f = getattr(mod, func_text.__name__)
