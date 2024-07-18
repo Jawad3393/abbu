@@ -133,7 +133,7 @@ def refine_spec(
     main(specification_file, output_file)
 
 
-def genererate_code(
+def generate_code(
     spec_file: str,
     out_file: str
 ):
