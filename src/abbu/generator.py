@@ -35,21 +35,21 @@ def setup(
         ABBU_CONFIG["model_version"] = model_version
         ABBU_CONFIG["cache_file"] = cache_file
 
-    ensure_cache_dir(os.path.dirname(cache_file))
 
-    if reset_cache and os.path.exists(cache_file):
-        with open(cache_file, 'w') as file:
+    if reset_cache:
+        with open(cache_file, "w") as file:
+            file.write("")
+    else:
+        if os.path.exists(cache_file):
             pass
-    
+        else:
+            with open(cache_file, "w") as file:
+                file.write("")
+
     return ABBU_CONFIG
 
 
-def ensure_cache_dir(cache_dir_path: str):
-    Path(cache_dir_path).mkdir(parents=True, exist_ok=True)
-
-
 def generate_code(spec: FunctionSpec):
-    global ABBU_CONFIG
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
 
     response = ABBU_CONFIG["client"].chat.completions.create(
@@ -60,13 +60,12 @@ def generate_code(spec: FunctionSpec):
         ]
     )
 
-    raw_text = response.choices[0].message['content'].strip()
+    raw_text = response.choices[0].message.content.strip()
     code_text = extract_code(raw_text, spec)
     return code_text
 
 
 def extract_code(raw_text: str, spec: FunctionSpec):
-    # TODO: need to make sure that gpt_output either matches spec.name ... or replace it
     # Find the part of the response that contains the Python code
     code_start = raw_text.find('def ')
     if code_start != -1:
@@ -93,12 +92,10 @@ def load_cache():
         return {}
     with open(cache_file, 'r') as file:
         contents = file.read()
+
+    return contents
     
-    return json.loads(contents)
-
-
-def update_cache(code_text: str, spec: FunctionSpec, cache: Dict[str, str]):
-    cache[spec.name] = code_text
+    # return json.loads(contents)
 
 
 def save_cache(cache: Dict[str, str]):
@@ -108,7 +105,14 @@ def save_cache(cache: Dict[str, str]):
 
 
 def load_code(module_name: str, file: str):
+    
+    print(f"module name", module_name)
+    print(f"file", file)
+
     spec = importlib.util.spec_from_file_location(module_name, file)
+
+    print(f"SPEC IS", spec)
+
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -130,7 +134,8 @@ def create_function(
     func_text = generate_code(spec)
 
     if save_to_cache:
-        update_cache(func_text, spec, cache)
+        # Updates the cache 
+        cache[spec.name] = func_text
         save_cache(cache)
 
     module_name = Path(ABBU_CONFIG["cache_file"]).stem
