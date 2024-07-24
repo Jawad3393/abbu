@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.append("/Users/jawada/Documents/abbu/src")
 import abbu 
 
 

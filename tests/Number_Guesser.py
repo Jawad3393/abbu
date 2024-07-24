@@ -1,8 +1,6 @@
 import os
 import sys
 import random
-
-sys.path.append("/Users/jawada/Documents/abbu/src")
 import abbu
 
 abbu.setup(

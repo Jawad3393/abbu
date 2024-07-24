@@ -2,8 +2,6 @@ import os
 import sys
 import random
 import turtle
-
-sys.path.append("/Users/jawada/Documents/abbu/src")
 import abbu
 
 abbu.setup(

@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.append("/home/antonxue/foo/test/abbu/src")
 import abbu
 
 

@@ -1,7 +1,7 @@
 import re
 import os
 from typing import Optional, Dict
-import openai
+from openai import OpenAI
 import importlib.util
 from pathlib import Path
 
@@ -26,8 +26,8 @@ def setup(
     if config is not None:
         ABBU_CONFIG = config
     else:
-        openai.api_key = api_key
-        ABBU_CONFIG["client"] = openai
+        client = OpenAI(api_key=api_key)
+        ABBU_CONFIG["client"] = client
         ABBU_CONFIG["model_version"] = model_version
         ABBU_CONFIG["cache_file"] = cache_file
 
@@ -48,25 +48,21 @@ def generate_code(spec: FunctionSpec):
     print(f"Generating code for spec: {spec}")
 
     try:
-        response = ABBU_CONFIG["client"].ChatCompletion.create(
+        response = ABBU_CONFIG["client"].chat.completions.create(
             model=ABBU_CONFIG["model_version"],
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        raw_text = response['choices'][0]['message']['content'].strip()
-        print(f"Raw response from OpenAI:\n{raw_text}\n")
+        raw_text = response.choices[0].message.content.strip()
         code_text = extract_code(raw_text, spec)
-        
-        # Debugging: Print extracted code
-        print(f"Extracted code for {spec.name}:\n{code_text}\n")
         
         return code_text
     except Exception as e:
         print(f"Error generating code from OpenAI: {e}")
         return None
-
+    
 def extract_code(raw_text: str, spec: FunctionSpec):
     code_blocks = re.findall(r'```python(.*?)```', raw_text, re.DOTALL)
     
@@ -108,10 +104,8 @@ def load_cache():
 
 def save_cache(cache: Dict[str, str]):
     cache_file = ABBU_CONFIG["cache_file"]
-    print("cache_contents", cache)
     with open(cache_file, 'w') as file:
         for func_name, func_code in cache.items():
-            print(f"Saving function {func_name} to cache:\n{func_code}\n")
             file.write(func_code + "\n\n")
     print(f"Cache saved to {cache_file}.")
 
@@ -141,10 +135,8 @@ def create_function(
         print("Failed to generate function code.")
         return None
 
-    print(f"Generated function text: {func_text}")
 
     if save_to_cache:
-        print(f"Saving function {spec.name} to cache.")
         cache[spec.name] = func_text
         save_cache(cache)
 
