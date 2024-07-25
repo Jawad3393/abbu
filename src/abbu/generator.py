@@ -8,6 +8,7 @@ from typing import Optional, Dict
 from openai import OpenAI
 from .consts import PROMPT_HEADER
 from .spec import FunctionSpec
+from .cache_utils import *
 
 # The config that will be filled in when setup(...) is called
 ABBU_CONFIG = {
@@ -51,14 +52,14 @@ def generate_code(spec: FunctionSpec):
             ]
         )
         raw_text = response.choices[0].message.content.strip()
-        code_text = extract_code(raw_text, spec)
+        code_text = extract_code_from_gpt_output(raw_text, spec)
         
         return code_text
     except Exception as e:
         print(f"Error generating code from OpenAI: {e}")
         return None
     
-def extract_code(raw_text: str, spec: FunctionSpec):
+def extract_code_from_gpt_output(raw_text: str, spec: FunctionSpec):
     code_blocks = re.findall(r'```python(.*?)```', raw_text, re.DOTALL)
     
     extracted_code = []
@@ -76,42 +77,12 @@ def extract_code(raw_text: str, spec: FunctionSpec):
     
     return cleaned_code.strip()
 
-def load_cache():
-    cache_file = ABBU_CONFIG["cache_file"]
-    if not os.path.exists(cache_file):
-        print(f"Cache file {cache_file} does not exist.")
-        return {}
-    
-    cache = {}
-    cache_namespace = {}
-    with open(cache_file, 'r') as file:
-        code = file.read()
-        if code.strip():  # Check if the file is not empty
-            exec(code, {}, cache_namespace)
-    
-    # Extract only the functions defined in the cache file
-    for name, obj in cache_namespace.items():
-        if callable(obj):
-            cache[name] = obj
 
-    print(f"Loaded cache: {cache}")
-    return cache
-
-def save_cache(cache: Dict[str, str]):
-    cache_file = ABBU_CONFIG["cache_file"]
-    with open(cache_file, 'a') as file:  
-        for func_name, func_code in cache.items():
-            if isinstance(func_code, str):
-                file.write(func_code + "\n\n")
-    print(f"Cache saved to {cache_file}.")
-
-def load_code(module_name: str, file: str):
-    spec = importlib.util.spec_from_file_location(module_name, file)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-def create_function(spec: FunctionSpec, use_cached_if_exists: bool = True, save_to_cache: bool = True):
+def create_function(
+    spec: FunctionSpec,
+    use_cached_if_exists: bool = True,
+    save_to_cache: bool = True
+):
     print(f"Creating function for spec: {spec}")
     cache = load_cache()
 
