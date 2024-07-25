@@ -17,7 +17,13 @@ ABBU_CONFIG = {
     "cache_file": None
 }
 
-def setup(api_key: str, cache_file: str, reset_cache: bool = False, model_version: str = "gpt-3.5-turbo", config: Optional[dict] = None):
+def setup(
+    api_key: str,
+    cache_file: str,
+    reset_cache: bool = False,
+    model_version: str = "gpt-3.5-turbo",
+    config: Optional[dict] = None
+):
     global ABBU_CONFIG
     if config is not None:
         ABBU_CONFIG = config
@@ -38,6 +44,7 @@ def setup(api_key: str, cache_file: str, reset_cache: bool = False, model_versio
             print(f"Cache file {cache_file} has been created.")
 
     return ABBU_CONFIG
+
 
 def generate_code(spec: FunctionSpec):
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
@@ -84,7 +91,7 @@ def create_function(
     save_to_cache: bool = True
 ):
     print(f"Creating function for spec: {spec}")
-    cache = load_cache()
+    cache = load_cache(ABBU_CONFIG["cache_file"])
 
     if use_cached_if_exists and spec.name in cache:
         print(f"Function {spec.name} found in cache.")
@@ -100,7 +107,7 @@ def create_function(
 
     if save_to_cache:
         cache[spec.name] = func_text
-        save_cache(cache)
+        save_cache(cache, ABBU_CONFIG["cache_file"])
 
     module_name = Path(ABBU_CONFIG["cache_file"]).stem
     mod = load_code(module_name, ABBU_CONFIG["cache_file"])
