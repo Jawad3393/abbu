@@ -1,10 +1,11 @@
-import re
 import os
-from typing import Optional, Dict
-from openai import OpenAI
+import re
+import sys
+import random
 import importlib.util
 from pathlib import Path
-
+from typing import Optional, Dict
+from openai import OpenAI
 from .consts import PROMPT_HEADER
 from .spec import FunctionSpec
 
@@ -15,13 +16,7 @@ ABBU_CONFIG = {
     "cache_file": None
 }
 
-def setup(
-    api_key: str,
-    cache_file: str,
-    reset_cache: bool = False,
-    model_version: str = "gpt-3.5-turbo",
-    config: Optional[dict] = None,
-):
+def setup(api_key: str, cache_file: str, reset_cache: bool = False, model_version: str = "gpt-3.5-turbo", config: Optional[dict] = None):
     global ABBU_CONFIG
     if config is not None:
         ABBU_CONFIG = config
@@ -104,9 +99,10 @@ def load_cache():
 
 def save_cache(cache: Dict[str, str]):
     cache_file = ABBU_CONFIG["cache_file"]
-    with open(cache_file, 'w') as file:
+    with open(cache_file, 'a') as file:  
         for func_name, func_code in cache.items():
-            file.write(func_code + "\n\n")
+            if isinstance(func_code, str):
+                file.write(func_code + "\n\n")
     print(f"Cache saved to {cache_file}.")
 
 def load_code(module_name: str, file: str):
@@ -115,11 +111,7 @@ def load_code(module_name: str, file: str):
     spec.loader.exec_module(module)
     return module
 
-def create_function(
-    spec: FunctionSpec,
-    use_cached_if_exists: bool = True,
-    save_to_cache: bool = True,
-):
+def create_function(spec: FunctionSpec, use_cached_if_exists: bool = True, save_to_cache: bool = True):
     print(f"Creating function for spec: {spec}")
     cache = load_cache()
 
@@ -134,7 +126,6 @@ def create_function(
     if func_text is None:
         print("Failed to generate function code.")
         return None
-
 
     if save_to_cache:
         cache[spec.name] = func_text
