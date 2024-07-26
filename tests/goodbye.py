@@ -2,7 +2,6 @@ import os
 import sys
 import abbu
 
-# UHELLO
 
 abbu.setup(
     api_key = os.getenv("OPENAI_API_KEY"),
