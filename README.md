@@ -23,7 +23,7 @@ import abbu
 abbu.setup(
     api_key = os.getenv("OPENAI_API_KEY"),
     cache_file = "/Users/jawada/Documents/CC/jawad_cache.py",
-    reset_cache=True # Nuke the entire cache file
+    reset_cache=True 
 )
 
 spec = abbu.FunctionSpec(
