@@ -3,12 +3,12 @@ import re
 import sys
 import random
 import importlib.util
+import ast
 from pathlib import Path
 from typing import Optional, Dict
 from openai import OpenAI
 from .consts import PROMPT_HEADER
 from .spec import FunctionSpec
-from .cache_utils import *
 
 # The config that will be filled in when setup(...) is called
 ABBU_CONFIG = {
@@ -17,13 +17,7 @@ ABBU_CONFIG = {
     "cache_file": None
 }
 
-def setup(
-    api_key: str,
-    cache_file: str,
-    reset_cache: bool = False,
-    model_version: str = "gpt-3.5-turbo",
-    config: Optional[dict] = None
-):
+def setup(api_key: str, cache_file: str, reset_cache: bool = False, model_version: str = "gpt-3.5-turbo", config: Optional[dict] = None):
     global ABBU_CONFIG
     if config is not None:
         ABBU_CONFIG = config
@@ -45,7 +39,6 @@ def setup(
 
     return ABBU_CONFIG
 
-
 def generate_code(spec: FunctionSpec):
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
     print(f"Generating code for spec: {spec}")
@@ -59,14 +52,14 @@ def generate_code(spec: FunctionSpec):
             ]
         )
         raw_text = response.choices[0].message.content.strip()
-        code_text = extract_code_from_gpt_output(raw_text, spec)
+        code_text = extract_code(raw_text, spec)
         
         return code_text
     except Exception as e:
         print(f"Error generating code from OpenAI: {e}")
         return None
     
-def extract_code_from_gpt_output(raw_text: str, spec: FunctionSpec):
+def extract_code(raw_text: str, spec: FunctionSpec):
     code_blocks = re.findall(r'```python(.*?)```', raw_text, re.DOTALL)
     
     extracted_code = []
@@ -84,14 +77,44 @@ def extract_code_from_gpt_output(raw_text: str, spec: FunctionSpec):
     
     return cleaned_code.strip()
 
+def load_cache():
+    cache_file = ABBU_CONFIG["cache_file"]
+    if not os.path.exists(cache_file):
+        print(f"Cache file {cache_file} does not exist.")
+        return {}
+    
+    cache = {}
+    cache_namespace = {}
+    with open(cache_file, 'r') as file:
+        code = file.read()
+        if code.strip():  # Check if the file is not empty
+            exec(code, {}, cache_namespace)
+    
+    # Extract only the functions defined in the cache file
+    for name, obj in cache_namespace.items():
+        if callable(obj):
+            cache[name] = obj
 
-def create_function(
-    spec: FunctionSpec,
-    use_cached_if_exists: bool = True,
-    save_to_cache: bool = True
-):
+    print(f"Loaded cache: {cache}")
+    return cache
+
+def save_cache(cache: Dict[str, str]):
+    cache_file = ABBU_CONFIG["cache_file"]
+    with open(cache_file, 'a') as file:  # Open the file in append mode
+        for func_name, func_code in cache.items():
+            if isinstance(func_code, str):
+                file.write(func_code + "\n\n")
+    print(f"Cache saved to {cache_file}.")
+
+def load_code(module_name: str, file: str):
+    spec = importlib.util.spec_from_file_location(module_name, file)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+def create_function(spec: FunctionSpec, use_cached_if_exists: bool = True, save_to_cache: bool = True):
     print(f"Creating function for spec: {spec}")
-    cache = load_cache(ABBU_CONFIG["cache_file"])
+    cache = load_cache()
 
     if use_cached_if_exists and spec.name in cache:
         print(f"Function {spec.name} found in cache.")
@@ -107,9 +130,45 @@ def create_function(
 
     if save_to_cache:
         cache[spec.name] = func_text
-        save_cache(cache, ABBU_CONFIG["cache_file"])
+        save_cache(cache)
 
     module_name = Path(ABBU_CONFIG["cache_file"]).stem
     mod = load_code(module_name, ABBU_CONFIG["cache_file"])
     f = getattr(mod, spec.name)
     return f
+
+# The remove method
+def remove(func_name: str):
+    cache_file = ABBU_CONFIG["cache_file"]
+    
+    if not os.path.exists(cache_file):
+        print(f"Cache file {cache_file} does not exist.")
+        return
+
+    with open(cache_file, 'r') as file:
+        cache_contents = file.read()
+
+    if not cache_contents.strip():
+        print("Cache file is empty.")
+        return
+
+    parsed_cache = ast.parse(cache_contents)
+    remover = FunctionRemover(func_name=func_name)
+    modified_cache_ast = remover.visit(parsed_cache)
+    modified_code = ast.unparse(modified_cache_ast)
+    modified_code = modified_code.rstrip() + "\n\n"
+
+    with open(cache_file, 'w') as file:
+        file.write(modified_code)
+
+    print(f"Function '{func_name}' has been removed from the cache.")
+
+# The FunctionRemover class
+class FunctionRemover(ast.NodeTransformer):
+    def __init__(self, func_name):
+        self.func_name = func_name
+
+    def visit_FunctionDef(self, node):
+        if node.name == self.func_name:
+            return None  
+        return node
