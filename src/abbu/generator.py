@@ -41,7 +41,7 @@ def setup(api_key: str, cache_file: str, reset_cache: bool = False, model_versio
 
 def generate_code(spec: FunctionSpec):
     prompt = PROMPT_HEADER + "\n" + spec.to_prompt()
-    print(f"Generating code for spec: {spec}")
+    #print(f"Generating code for spec: {spec}")
 
     try:
         response = ABBU_CONFIG["client"].chat.completions.create(
@@ -95,7 +95,7 @@ def load_cache():
         if callable(obj):
             cache[name] = obj
 
-    print(f"Loaded cache: {cache}")
+    #print(f"Loaded cache: {cache}")
     return cache
 
 def save_cache(cache: Dict[str, str]):
@@ -112,12 +112,27 @@ def load_code(module_name: str, file: str):
     spec.loader.exec_module(module)
     return module
 
-def create_function(spec: FunctionSpec, use_cached_if_exists: bool = True, save_to_cache: bool = True):
-    print(f"Creating function for spec: {spec}")
+def create_function(params: list, description: str, use_cached_if_exists: bool = True, save_to_cache: bool = True):
+    # Generate a simple hash for the function name
+    spec_name = str(abs(hash(description)))[:8]
+    
+    # Ensure the function name starts with a valid character
+    if spec_name[0].isdigit():
+        spec_name = 'f_' + spec_name
+
+    #print(f"Creating function with hash name: {spec_name}")
+
+    # Construct a temporary FunctionSpec-like object
+    spec = FunctionSpec(
+        name=spec_name,
+        params=params,
+        description=description
+    )
+
     cache = load_cache()
 
     if use_cached_if_exists and spec.name in cache:
-        print(f"Function {spec.name} found in cache.")
+        #print(f"Function {spec.name} found in cache.")
         module_name = Path(ABBU_CONFIG["cache_file"]).stem
         mod = load_code(module_name, ABBU_CONFIG["cache_file"])
         f = getattr(mod, spec.name)
@@ -136,6 +151,7 @@ def create_function(spec: FunctionSpec, use_cached_if_exists: bool = True, save_
     mod = load_code(module_name, ABBU_CONFIG["cache_file"])
     f = getattr(mod, spec.name)
     return f
+
 
 # The remove method
 def remove(func_name: str):
